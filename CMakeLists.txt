@@ -31,6 +31,7 @@ find_package(rviz_ogre_vendor REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Test Concurrent)
+find_package(TBB REQUIRED)
 
 #karto_sdk lib
 set(BUILD_SHARED_LIBS ON)
@@ -129,7 +130,7 @@ add_library(ceres_solver_plugin solvers/ceres_solver.cpp)
 ament_target_dependencies(ceres_solver_plugin ${dependencies})
 target_link_libraries(ceres_solver_plugin ${CERES_LIBRARIES}
                                           ${Boost_LIBRARIES}
-                                          ${TBB_LIBRARIES}
+                                          TBB::tbb
                                           kartoSlamToolbox
 )
 rosidl_target_interfaces(ceres_solver_plugin ${PROJECT_NAME} "rosidl_typesupport_cpp")
