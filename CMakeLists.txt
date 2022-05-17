@@ -106,6 +106,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   srvs/SerializePoseGraph.srv
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs visualization_msgs
 )
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 #### rviz Plugin
 qt5_wrap_cpp(MOC_FILES rviz_plugin/slam_toolbox_rviz_plugin.hpp)
@@ -119,11 +120,13 @@ target_include_directories(SlamToolboxPlugin PUBLIC
   ${Qt5Widgets_INCLUDE_DIRS}
   ${OGRE_INCLUDE_DIRS}
 )
-target_link_libraries(SlamToolboxPlugin ${QT_LIBRARIES} rviz_common::rviz_common)
-rosidl_target_interfaces(SlamToolboxPlugin ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(SlamToolboxPlugin ${QT_LIBRARIES} rviz_common::rviz_common "${cpp_typesupport_target}")
+add_dependencies(SlamToolboxPlugin ${PROJECT_NAME})
+#rosidl_target_interfaces(SlamToolboxPlugin ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 target_compile_definitions(SlamToolboxPlugin PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 target_compile_definitions(SlamToolboxPlugin PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY")
-pluginlib_export_plugin_description_file(rviz_common rviz_plugins.xml) 
+pluginlib_export_plugin_description_file(rviz_common rviz_plugins.xml)
 
 #### Ceres Plugin
 add_library(ceres_solver_plugin solvers/ceres_solver.cpp)
@@ -132,8 +135,10 @@ target_link_libraries(ceres_solver_plugin ${CERES_LIBRARIES}
                                           ${Boost_LIBRARIES}
                                           TBB::tbb
                                           kartoSlamToolbox
+                                          "${cpp_typesupport_target}"
 )
-rosidl_target_interfaces(ceres_solver_plugin ${PROJECT_NAME} "rosidl_typesupport_cpp")
+add_dependencies(ceres_solver_plugin ${PROJECT_NAME})
+#rosidl_target_interfaces(ceres_solver_plugin ${PROJECT_NAME} "rosidl_typesupport_cpp")
 pluginlib_export_plugin_description_file(slam_toolbox solver_plugins.xml)
 
 #### Tool lib for mapping
@@ -141,8 +146,9 @@ add_library(toolbox_common src/slam_toolbox_common.cpp src/map_saver.cpp src/loo
 ament_target_dependencies(toolbox_common
   ${dependencies}
 )
-target_link_libraries(toolbox_common kartoSlamToolbox ${Boost_LIBRARIES})
-rosidl_target_interfaces(toolbox_common ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(toolbox_common kartoSlamToolbox ${Boost_LIBRARIES} "${cpp_typesupport_target}")
+add_dependencies(toolbox_common ${PROJECT_NAME})
+#rosidl_target_interfaces(toolbox_common ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 #### Mapping executibles
 add_library(async_slam_toolbox src/slam_toolbox_async.cpp)
