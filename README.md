@@ -194,6 +194,7 @@ The following are the services/topics that are exposed for use. See the rviz plu
 | `/slam_toolbox/save_map`  | `slam_toolbox/SaveMap` | Save the map image file of the pose-graph that is useable for display or AMCL localization. It is a simple wrapper on `map_server/map_saver` but is useful. | 
 | `/slam_toolbox/serialize_map`  | `slam_toolbox/SerializePoseGraph` | Save the map pose-graph and datathat is useable for continued mapping, slam_toolbox localization, offline manipulation, and more | 
 | `/slam_toolbox/toggle_interactive_mode`  | `slam_toolbox/ToggleInteractive` | Toggling in and out of interactive mode, publishing interactive markers of the nodes and their positions to be updated in an application | 
+| `/slam_toolbox/reset`  | `slam_toolbox/Reset` | Reset current map back to the initial state | 
 
 # Configuration
 
@@ -262,6 +263,8 @@ The following settings and options are exposed to you. My default configuration 
 `stack_size_to_use` - The number of bytes to reset the stack size to, to enable serialization/deserialization of files. A liberal default is 40000000, but less is fine.
 
 `minimum_travel_distance` - Minimum distance of travel before processing a new scan
+
+`localization_on_configure` - Set to true to set the localization mode to localization during node on_configure transition. Set to false to set the localization mode to mapping instead. Only applies to `map_and_localization_slam_toolbox` node.
 
 ## Matcher Params
 
