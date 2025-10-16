@@ -52,7 +52,7 @@ An overview of how the map was generated is presented below:
 
 # Support and Contribution
 
-If you have any questions on use or configuration, please post your questions on [ROS Answers](answers.ros.org) and someone from the community will work their hardest to get back to you. Tangible issues in the codebase or feature requests should be made with GitHub issues.  
+If you have any questions on use or configuration, please post your questions on [Robotics Stack Exchange](https://robotics.stackexchange.com) with the `slam` and `ros2` tags and someone from the community will work their hardest to get back to you. Tangible issues in the codebase or feature requests should be made with GitHub issues.  
 
 If you're interested in contributing to this project in a substantial way, please file a public GitHub issue on your new feature / patch. If for some reason the development of this feature is sensitive, please email the maintainers at their email addresses listed in the `package.xml` file. 
 
@@ -226,6 +226,8 @@ The following settings and options are exposed to you. My default configuration 
 
 `scan_topic` - scan topic, *absolute* path, i.e. `/scan` not `scan`
 
+`restamp_tf` - Whether to restamp the TF messages with the current time or use the scan's message. Default False.
+
 `scan_queue_size` - The number of scan messages to queue up before throwing away old ones. Should always be set to 1 in async mode
 
 `use_map_saver` - Instantiate the map saver service and self-subscribe to the map topic
@@ -323,6 +325,10 @@ The following settings and options are exposed to you. My default configuration 
 `minimum_distance_penalty` - Smallest penalty a scan can have to ensure the size doesn't blow up
 
 `use_response_expansion` - Whether to automatically increase the search grid size if no viable match is found
+
+`min_pass_through` - Number of beams that must pass through a cell before it will be considered to be occupied or unoccupied. This prevents stray beams from messing up the map.
+
+`occupancy_threshold` - Minimum ratio of beams hitting cell to beams passing through cell to be marked as occupied
 
 # Install
 
