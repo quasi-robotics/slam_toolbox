@@ -71,6 +71,19 @@ If you have previously existing serialized files (e.g. not `pgm` maps, but `.pos
 
 More of the conversation can be seen on tickets #198 and #281. I apologize for the inconvenience, however this solves a very large bug that was impacting a large number of users. I've worked hard to make sure there's a viable path forward for everyone.
 
+# Multi-Robot SLAM
+
+`decentralized_multirobot_slam_toolbox_node` extends slam_toolbox for multi-robot mapping. Each robot runs its own slam_toolbox instance under a unique namespace; localized scans are exchanged to align peer pose graphs over a shared global frame.
+
+👉 See **[docs/decentralized_multi_robot_slam.md](docs/decentralized_multi_robot_slam.md)** for details on:
+- Multi-Robot mapping
+- Decentralized multi-robot slam architecture
+- How to set up the shared global frame
+- What topics are shared (and why)
+- Example launch files & demo package
+
+![multirobot_slam](images/decentralized_multirobot/multi-robot_mapping.gif?raw=true "Multi-Robot SLAM")
+
 # LifeLong Mapping
 
 <!--  Continuing mapping Gif here-->
@@ -110,6 +123,7 @@ To enable, set `mode: localization` in the configuration file to allow for the C
 To minimize the amount of changes required for moving to this mode over AMCL, we also expose a subscriber to the `/initialpose` topic used by AMCL to relocalize to a position, which also hooks up to the `2D Pose Estimation` tool in RVIZ. This way you can enter localization mode with our approach but continue to use the same API as you expect from AMCL for ease of integration.
 
 In summary, this approach I dub `elastic pose-graph localization` is where we take existing map pose-graphs and localized with-in them with a rolling window of recent scans. This way we can localize in an existing map using the scan matcher, but not update the underlaying map long-term should something go wrong. It can be considered a replacement to AMCL and results is not needing any .pgm maps ever again. The lifelong mapping/continuous slam mode above will do better if you'd like to modify the underlying graph while moving. This method of localization might not be suitable for all applications, it does require quite a bit of tuning for your particular robot and needs high quality odometry. If in doubt, you're always welcome to use other 2D map localizers in the ecosystem like AMCL. For most beginners or users looking for a good out of the box experience, I'd recommend AMCL. 
+
 
 ## Tools 
 
@@ -181,6 +195,9 @@ The following are the services/topics that are exposed for use. See the rviz plu
 |-----|----|----|
 | map  | `nav_msgs/OccupancyGrid` | occupancy grid representation of the pose-graph at `map_update_interval` frequency | 
 | pose | `geometry_msgs/PoseWithCovarianceStamped` | pose of the base_frame in the configured map_frame along with the covariance calculated from the scan match |
+| /slam_toolbox/new_node_event | `slam_toolbox/NewNodeEvent` | Event message triggered when a new pose graph node is added. Contains node ID, timestamp, pose, and all incoming edges (including sequential and loop closure edges) for incremental graph updates. |
+| /slam_toolbox/loop_closure_event | `slam_toolbox/LoopClosureEvent` | Event message triggered when a loop closure is detected and processed. Contains only a timestamp. |
+| /slam_toolbox/pose_graph | `slam_toolbox/PoseGraph` | Full pose graph message containing all nodes, edges, and poses (no sensor data). Published **only on loop closure events**. For incremental updates between loop closures, use `new_node_event` to avoid the overhead of republishing the entire graph. |
 
 ## Exposed Services
 
@@ -268,6 +285,10 @@ The following settings and options are exposed to you. My default configuration 
 
 `minimum_travel_distance` - Minimum distance of travel before processing a new scan
 
+`minimum_travel_heading` - Minimum changing in heading to justify an update.
+
+`check_min_dist_and_heading_precisely` - Whether to always check if either *`minimum_travel_distance`* or *`minimum_travel_heading`* is satisfied. With the default value *`false`*, the behavior suits most cases where, for example, rotational odometry is poor.
+
 `localization_on_configure` - Set to true to set the localization mode to localization during node on_configure transition. Set to false to set the localization mode to mapping instead. Only applies to `map_and_localization_slam_toolbox` node.
 
 ## Matcher Params
@@ -275,8 +296,6 @@ The following settings and options are exposed to you. My default configuration 
 `use_scan_matching` - whether to use scan matching to refine odometric pose (uh, why would you not?)
 
 `use_scan_barycenter` - Whether to use the barycenter or scan pose
-
-`minimum_travel_heading` - Minimum changing in heading to justify an update
 
 `scan_buffer_size` - The number of scans to buffer into a chain, also used as the number of scans in the circular buffer of localization mode
 
