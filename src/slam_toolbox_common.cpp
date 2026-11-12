@@ -53,6 +53,14 @@ SlamToolbox::SlamToolbox(rclcpp::NodeOptions options)
     this->declare_parameter(
       "stack_size_to_use", rclcpp::ParameterType::PARAMETER_INTEGER, descriptor);
     if (this->get_parameter("stack_size_to_use", stack_size)) {
+#ifdef _WIN32
+      if (stack_size != 40'000'000) {
+        RCLCPP_WARN(
+          get_logger(),
+          "Dynamic stack size configuration is unavailable on Windows; "
+          "node was built with stack size 40000000");
+      }
+#else
       RCLCPP_INFO(get_logger(), "Node using stack size %i", (int)stack_size);
       const rlim_t max_stack_size = stack_size;
       struct rlimit stack_limit;
@@ -61,6 +69,7 @@ SlamToolbox::SlamToolbox(rclcpp::NodeOptions options)
         stack_limit.rlim_cur = stack_size;
       }
       setrlimit(RLIMIT_STACK, &stack_limit);
+#endif
     }
   }
   // server side never times out from lifecycle manager
@@ -104,7 +113,11 @@ CallbackReturn SlamToolbox::on_configure(const rclcpp_lifecycle::State &)
   RCLCPP_INFO(get_logger(), "Configuring");
   processor_type_ = PROCESS;
   first_measurement_ = true;
+  scan_count_ = 0;
   process_near_pose_ = nullptr;
+  // Pause flags are per-session. Stale ones desync from the parameters
+  // republished below and by LoopClosureAssistant.
+  state_.reset();
   smapper_ = std::make_unique<mapper_utils::SMapper>();
   dataset_ = std::make_unique<Dataset>();
 
@@ -520,7 +533,7 @@ void SlamToolbox::publishTransformLoop(
     return;
   }
 
-  rclcpp::Rate r(1.0 / transform_publish_period);
+  rclcpp::WallRate r(1.0 / transform_publish_period);
   while (rclcpp::ok()) {
     boost::this_thread::interruption_point();
     {
@@ -564,7 +577,7 @@ void SlamToolbox::publishVisualizations()
     this->declare_parameter("map_update_interval", map_update_interval);
   }
   map_update_interval = this->get_parameter("map_update_interval").as_double();
-  rclcpp::Rate r(1.0 / map_update_interval);
+  rclcpp::WallRate r(1.0 / map_update_interval);
 
   while (rclcpp::ok()) {
     boost::this_thread::interruption_point();
@@ -703,7 +716,10 @@ bool SlamToolbox::updateMap()
   vis_utils::toNavMap(occ_grid, map_.map);
 
   // publish map as current
-  map_.map.header.stamp = scan_header.stamp;
+  {
+    boost::mutex::scoped_lock scan_header_lock(map_to_odom_mutex_);
+    map_.map.header.stamp = scan_header.stamp;
+  }
   sst_->publish(
     std::move(std::make_unique<nav_msgs::msg::OccupancyGrid>(map_.map)));
   sstm_->publish(
@@ -803,20 +819,16 @@ bool SlamToolbox::shouldProcessScan(
   const Pose2 & pose)
 /*****************************************************************************/
 {
-  static Pose2 last_pose;
-  static rclcpp::Time last_scan_time = rclcpp::Time(0.);
-  static double min_dist2 =
-    smapper_->getMapper()->getParamMinimumTravelDistance() *
-    smapper_->getMapper()->getParamMinimumTravelDistance();
-  static double min_rotation =
+  const double min_dist = smapper_->getMapper()->getParamMinimumTravelDistance();
+  const double min_dist2 = min_dist * min_dist;
+  const double min_rotation =
     smapper_->getMapper()->getParamMinimumTravelHeadingInRadians();
-  static int scan_ctr = 0;
-  scan_ctr++;
+  scan_count_++;
 
   // we give it a pass on the first measurement to get the ball rolling
   if (first_measurement_) {
-    last_scan_time = scan->header.stamp;
-    last_pose = pose;
+    last_scan_time_ = scan->header.stamp;
+    last_scan_pose_ = pose;
     first_measurement_ = false;
     return true;
   }
@@ -827,25 +839,25 @@ bool SlamToolbox::shouldProcessScan(
   }
 
   // throttled out
-  if ((scan_ctr % throttle_scans_) != 0) {
+  if ((scan_count_ % throttle_scans_) != 0) {
     return false;
   }
 
   // not enough time
-  if (rclcpp::Time(scan->header.stamp) - last_scan_time < minimum_time_interval_) {
+  if (rclcpp::Time(scan->header.stamp) - last_scan_time_ < minimum_time_interval_) {
     return false;
   }
 
   // for initial stabilization
-  if (scan_ctr < 5) {
+  if (scan_count_ < 5) {
     return false;
   }
 
   // check if the movement is enough
-  const double dist2 = last_pose.SquaredDistance(pose);
+  const double dist2 = last_scan_pose_.SquaredDistance(pose);
   if (check_min_dist_and_heading_precisely_) {
     const double heading_diff =
-      fabs(math::NormalizeAngle(pose.GetHeading() - last_pose.GetHeading()));
+      fabs(math::NormalizeAngle(pose.GetHeading() - last_scan_pose_.GetHeading()));
     if (dist2 < min_dist2 && heading_diff < min_rotation) {
       return false;
     }
@@ -854,8 +866,8 @@ bool SlamToolbox::shouldProcessScan(
     return false;
   }
 
-  last_pose = pose;
-  last_scan_time = scan->header.stamp;
+  last_scan_pose_ = pose;
+  last_scan_time_ = scan->header.stamp;
 
   return true;
 }
@@ -874,14 +886,28 @@ LocalizedRangeScan * SlamToolbox::addScan(
   LaserRangeFinder * laser,
   const sensor_msgs::msg::LaserScan::ConstSharedPtr & scan,
   Pose2 & odom_pose)
+{
+  boost::mutex::scoped_lock lock(smapper_mutex_);
+  if (!laser) {
+    RCLCPP_WARN(get_logger(), "SlamToolbox: addScan() called without a laser, "
+      "ignoring scan.");
+    return nullptr;
+  }
+
+  return addScanImpl(laser, scan, odom_pose);
+}
+
+/*****************************************************************************/
+LocalizedRangeScan * SlamToolbox::addScanImpl(
+  LaserRangeFinder * laser,
+  const sensor_msgs::msg::LaserScan::ConstSharedPtr & scan,
+  Pose2 & odom_pose)
 /*****************************************************************************/
 {
   // get our localized range scan
   LocalizedRangeScan * range_scan = getLocalizedRangeScan(
     laser, scan, odom_pose);
 
-  // Add the localized range scan to the smapper
-  boost::mutex::scoped_lock lock(smapper_mutex_);
   bool processed = false, update_reprocessing_transform = false;
 
   Matrix3 covariance;
@@ -1079,7 +1105,10 @@ void SlamToolbox::publishNewNodeEvent(const karto::LocalizedRangeScan* lrs)
   }
 
   slam_toolbox::msg::NewNodeEvent ev;
-  ev.stamp = scan_header.stamp;
+  {
+    boost::mutex::scoped_lock scan_header_lock(map_to_odom_mutex_);
+    ev.stamp = scan_header.stamp;
+  }
   ev.new_node_id = lrs->GetUniqueId();
 
   // Cache the corrected pose to avoid multiple function calls

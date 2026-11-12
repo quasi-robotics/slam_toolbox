@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.20)
 project(slam_toolbox)
 
 set(CMAKE_BUILD_TYPE Release) #None, Debug, Release, RelWithDebInfo, MinSizeRel
@@ -6,6 +6,15 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
 cmake_policy(SET CMP0077 NEW)
+
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
+if(MSVC)
+  add_compile_definitions(_USE_MATH_DEFINES)
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/CMake/")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/karto_sdk/cmake)
@@ -71,6 +80,7 @@ set(dependencies
   interactive_markers
   Qt${QT_VERSION_MAJOR}
   rclcpp_components
+  nanoflann
 )
 
 set(libraries
@@ -96,7 +106,7 @@ find_package(Ceres REQUIRED COMPONENTS SuiteSparse)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 add_definitions(-DQT_NO_KEYWORDS)
-find_package(Boost REQUIRED system serialization filesystem thread)
+find_package(Boost REQUIRED serialization filesystem thread)
 
 include_directories(include lib/karto_sdk/include
                             ${EIGEN3_INCLUDE_DIRS}
@@ -272,11 +282,37 @@ target_link_libraries(map_and_localization_slam_toolbox localization_slam_toolbo
 add_executable(map_and_localization_slam_toolbox_node src/experimental/slam_toolbox_map_and_localization_node.cpp)
 target_link_libraries(map_and_localization_slam_toolbox_node map_and_localization_slam_toolbox)
 
+if(MSVC)
+  foreach(
+    target
+    decentralized_multirobot_slam_toolbox_node
+    async_slam_toolbox_node
+    sync_slam_toolbox_node
+    localization_slam_toolbox_node
+    lifelong_slam_toolbox_node
+    map_and_localization_slam_toolbox_node)
+    target_compile_options(${target} PRIVATE /F40000000)
+  endforeach()
+endif()
+
 #### Merging maps tool
 add_executable(merge_maps_kinematic src/merge_maps_kinematic.cpp)
 target_link_libraries(merge_maps_kinematic kartoSlamToolbox toolbox_common)
 
 #### testing
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(scan_filter_test test/scan_filter_test.cpp)
+  if(TARGET scan_filter_test)
+    target_link_libraries(scan_filter_test toolbox_common)
+    add_dependencies(scan_filter_test ceres_solver_plugin)
+  endif()
+  ament_add_gtest(remove_node_from_graph_test test/remove_node_from_graph_test.cpp)
+  if(TARGET remove_node_from_graph_test)
+    target_link_libraries(remove_node_from_graph_test kartoSlamToolbox)
+  endif()
+endif()
+
 #if(BUILD_TESTING)
 #  find_package(ament_cmake_gtest REQUIRED)
 #  find_package(ament_lint_auto REQUIRED)

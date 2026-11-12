@@ -32,6 +32,11 @@
 #include <QLabel>
 #include <QFrame>
 #include <QRadioButton>
+#if defined(_WIN32) && defined(NO_ERROR)
+#pragma push_macro("NO_ERROR")
+#undef NO_ERROR
+#define SLAM_TOOLBOX_RESTORE_NO_ERROR_MACRO
+#endif
 // STL
 #include <thread>
 #include <chrono>
@@ -41,6 +46,8 @@
 #include "rviz_common/panel.hpp"
 #include "slam_toolbox/toolbox_msgs.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "tf2_ros/transform_listener.hpp"
+#include "tf2_ros/buffer.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 class QLineEdit;
@@ -151,6 +158,9 @@ protected:
   rclcpp::Client<slam_toolbox::srv::DeserializePoseGraph>::SharedPtr _load_map;
 
   std::unique_ptr<std::thread> _thread;
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::string map_frame_;
 
   ContinueMappingType _match_type;
   
@@ -160,5 +170,10 @@ protected:
 };
 
 }  // namespace slam_toolbox
+
+#ifdef SLAM_TOOLBOX_RESTORE_NO_ERROR_MACRO
+#pragma pop_macro("NO_ERROR")
+#undef SLAM_TOOLBOX_RESTORE_NO_ERROR_MACRO
+#endif
 
 #endif  // RVIZ_PLUGIN__SLAM_TOOLBOX_RVIZ_PLUGIN_H_

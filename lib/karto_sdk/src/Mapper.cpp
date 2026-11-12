@@ -405,7 +405,7 @@ void MapperSensorManager::SetRunningScanBufferSize(kt_int32u rScanBufferSize)
   m_RunningBufferMaximumSize = rScanBufferSize;
 
   std::vector<Name> names = GetSensorNames();
-  for (uint i = 0; i != names.size(); i++) {
+  for (unsigned int i = 0; i != names.size(); i++) {
     GetScanManager(names[i])->SetRunningScanBufferSize(rScanBufferSize);
   }
 }
@@ -415,7 +415,7 @@ void MapperSensorManager::SetRunningScanBufferMaximumDistance(kt_double rScanBuf
   m_RunningBufferMaximumDistance = rScanBufferMaxDistance;
 
   std::vector<Name> names = GetSensorNames();
-  for (uint i = 0; i != names.size(); i++) {
+  for (unsigned int i = 0; i != names.size(); i++) {
     GetScanManager(names[i])->SetRunningScanBufferMaximumDistance(rScanBufferMaxDistance);
   }
 }
@@ -474,22 +474,37 @@ ScanMatcher::~ScanMatcher()
   }
 }
 
+const kt_double MIN_MAPPER_VALUE = 1e-6;
+const kt_double MAX_MAPEER_VALUE = 1e6;
+
 ScanMatcher * ScanMatcher::Create(
   Mapper * pMapper, kt_double searchSize, kt_double resolution,
   kt_double smearDeviation, kt_double rangeThreshold)
 {
   // invalid parameters
-  if (resolution <= 0) {
-    return NULL;
+  if (resolution < MIN_MAPPER_VALUE || resolution > MAX_MAPEER_VALUE) {
+    std::stringstream error;
+    error << "Invalid resolution " << resolution << " passed to ScanMatcher::Create. Must be between "
+          << MIN_MAPPER_VALUE << " and " << MAX_MAPEER_VALUE << ".";
+    throw std::invalid_argument(error.str());
   }
-  if (searchSize <= 0) {
-    return NULL;
+  if (searchSize < MIN_MAPPER_VALUE || searchSize > MAX_MAPEER_VALUE) {
+    std::stringstream error;
+    error << "Invalid search size " << searchSize << " passed to ScanMatcher::Create. Must be between "
+          << MIN_MAPPER_VALUE << " and " << MAX_MAPEER_VALUE << ".";
+    throw std::invalid_argument(error.str());
   }
-  if (smearDeviation < 0) {
-    return NULL;
+  if (smearDeviation < MIN_MAPPER_VALUE || smearDeviation > MAX_MAPEER_VALUE) {
+    std::stringstream error;
+    error << "Invalid smear deviation " << smearDeviation << " passed to ScanMatcher::Create. Must be between "
+          << MIN_MAPPER_VALUE << " and " << MAX_MAPEER_VALUE << ".";
+    throw std::invalid_argument(error.str());
   }
-  if (rangeThreshold <= 0) {
-    return NULL;
+  if (rangeThreshold < MIN_MAPPER_VALUE || rangeThreshold > MAX_MAPEER_VALUE) {
+    std::stringstream error;
+    error << "Invalid range threshold " << rangeThreshold << " passed to ScanMatcher::Create. Must be between "
+          << MIN_MAPPER_VALUE << " and " << MAX_MAPEER_VALUE << ".";
+    throw std::invalid_argument(error.str());
   }
 
   assert(math::DoubleEqual(math::Round(searchSize / resolution), (searchSize / resolution)));
@@ -1856,19 +1871,19 @@ std::vector<Vertex<LocalizedRangeScan> *> MapperGraph::FindNearByVertices(
   const P2KD p2kd(vertices_to_search);
 
   typedef nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<double, P2KD>, P2KD,
-      dim> my_kd_tree_t;
+      dim, size_t> my_kd_tree_t;
 
   my_kd_tree_t index(dim, p2kd, nanoflann::KDTreeSingleIndexAdaptorParams(10) );
   index.buildIndex();
 
-  std::vector<std::pair<size_t, double>> ret_matches;
+  std::vector<nanoflann::ResultItem<size_t, double>> ret_matches;
   const double query_pt[2] = {refPose.GetX(), refPose.GetY()};
-  nanoflann::SearchParams params;
+  nanoflann::SearchParameters params;
   const size_t num_results = index.radiusSearch(&query_pt[0], maxDistance, ret_matches, params);
 
   std::vector<Vertex<LocalizedRangeScan> *> rtn_vertices;
   rtn_vertices.reserve(ret_matches.size());
-  for (uint i = 0; i != ret_matches.size(); i++) {
+  for (unsigned int i = 0; i != ret_matches.size(); i++) {
     rtn_vertices.push_back(vertices_to_search[ret_matches[i].first]);
   }
   return rtn_vertices;
@@ -1894,7 +1909,7 @@ Vertex<LocalizedRangeScan> * MapperGraph::FindNearByScan(Name name, const Pose2 
   const P2KD p2kd(vertices_to_search);
 
   typedef nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<double, P2KD>, P2KD,
-      dim> my_kd_tree_t;
+      dim, size_t> my_kd_tree_t;
 
   my_kd_tree_t index(dim, p2kd, nanoflann::KDTreeSingleIndexAdaptorParams(10) );
   index.buildIndex();
@@ -2989,7 +3004,7 @@ void Mapper::ClearLocalizationBuffer()
   }
 
   std::vector<Name> names = m_pMapperSensorManager->GetSensorNames();
-  for (uint i = 0; i != names.size(); i++)
+  for (unsigned int i = 0; i != names.size(); i++)
   {
     m_pMapperSensorManager->ClearRunningScans(names[i]);
     m_pMapperSensorManager->ClearLastScan(names[i]);
@@ -3014,8 +3029,8 @@ kt_bool Mapper::RemoveNodeFromGraph(Vertex<LocalizedRangeScan> * vertex_to_remov
         m_pScanOptimizer->RemoveConstraint(
           adjEdges[j]->GetSource()->GetObject()->GetUniqueId(),
           adjEdges[j]->GetTarget()->GetObject()->GetUniqueId());
-        std::vector<Edge<LocalizedRangeScan> *> edges = m_pGraph->GetEdges();
-        std::vector<Edge<LocalizedRangeScan> *>::iterator edgeGraphIt =
+        const std::vector<Edge<LocalizedRangeScan> *> & edges = m_pGraph->GetEdges();
+        std::vector<Edge<LocalizedRangeScan> *>::const_iterator edgeGraphIt =
           std::find(edges.begin(), edges.end(), adjEdges[j]);
 
         if (edgeGraphIt == edges.end()) {
@@ -3024,9 +3039,8 @@ kt_bool Mapper::RemoveNodeFromGraph(Vertex<LocalizedRangeScan> * vertex_to_remov
         }
 
         int posEdge = edgeGraphIt - edges.begin();
-        m_pGraph->RemoveEdge(posEdge);   // remove from graph
         delete *edgeGraphIt;   // free hat!
-        *edgeGraphIt = NULL;
+        m_pGraph->RemoveEdge(posEdge);   // sets the slot to NULL, then erases it
         found = true;
       }
     }
@@ -3040,11 +3054,15 @@ kt_bool Mapper::RemoveNodeFromGraph(Vertex<LocalizedRangeScan> * vertex_to_remov
   m_pScanOptimizer->RemoveNode(vertex_to_remove->GetObject()->GetUniqueId());
 
   // 3) delete from vertex map
-  std::map<Name, std::map<int, Vertex<LocalizedRangeScan> *>>
-  vertexMap = m_pGraph->GetVertices();
-  std::map<int, Vertex<LocalizedRangeScan> *> graphVertices =
-    vertexMap[vertex_to_remove->GetObject()->GetSensorName()];
-  std::map<int, Vertex<LocalizedRangeScan> *>::iterator
+  const std::map<Name, std::map<int, Vertex<LocalizedRangeScan> *>> & vertexMap =
+    m_pGraph->GetVertices();
+  const auto sensorVerticesIt = vertexMap.find(vertex_to_remove->GetObject()->GetSensorName());
+  if (sensorVerticesIt == vertexMap.end()) {
+    std::cout << "Vertex not found in graph to remove!" << std::endl;
+    return false;
+  }
+  const std::map<int, Vertex<LocalizedRangeScan> *> & graphVertices = sensorVerticesIt->second;
+  std::map<int, Vertex<LocalizedRangeScan> *>::const_iterator
     vertexGraphIt = graphVertices.find(vertex_to_remove->GetObject()->GetStateId());
   if (vertexGraphIt != graphVertices.end()) {
     m_pGraph->RemoveVertex(vertex_to_remove->GetObject()->GetSensorName(),

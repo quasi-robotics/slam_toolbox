@@ -19,7 +19,9 @@
 #ifndef SLAM_TOOLBOX__SLAM_TOOLBOX_COMMON_HPP_
 #define SLAM_TOOLBOX__SLAM_TOOLBOX_COMMON_HPP_
 
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 #include <boost/thread.hpp>
 #include <string>
 #include <map>
@@ -119,7 +121,10 @@ protected:
   virtual karto::LocalizedRangeScan * addScan(
     karto::LaserRangeFinder * laser, const sensor_msgs::msg::LaserScan::ConstSharedPtr & scan,
     karto::Pose2 & karto_pose);
-  karto::LocalizedRangeScan * addScan(karto::LaserRangeFinder * laser, PosedScan & scanWPose);
+  karto::LocalizedRangeScan * addScan(karto::LaserRangeFinder * laser, PosedScan & scan_w_pose);
+  karto::LocalizedRangeScan * addScanImpl(
+    karto::LaserRangeFinder * laser, const sensor_msgs::msg::LaserScan::ConstSharedPtr & scan,
+    karto::Pose2 & karto_pose);
   bool updateMap();
   tf2::Stamped<tf2::Transform> setTransformFromPoses(
     const karto::Pose2 & pose,
@@ -201,6 +206,9 @@ protected:
   std::unique_ptr<slam_toolbox::LoopClosureListener> loop_closure_listener_;
 
   // Internal state
+  karto::Pose2 last_scan_pose_;
+  rclcpp::Time last_scan_time_{0, 0, RCL_ROS_TIME};
+  int scan_count_{0};
   std::vector<std::unique_ptr<boost::thread>> threads_;
   tf2::Transform map_to_odom_;
   boost::mutex map_to_odom_mutex_, smapper_mutex_, pose_mutex_;

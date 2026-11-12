@@ -2,13 +2,13 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>slam_toolbox</name>
-  <version>2.9.0</version>
+  <version>2.10.0</version>
   <description>
      This package provides a sped up improved slam karto with updated SDK and visualization and modification toolsets
   </description>
   <maintainer email="stevenmacenski@gmail.com">Steve Macenski</maintainer>
   <maintainer email="michel@ekumenlabs.com">Michel Hidalgo</maintainer>
-  <license>LGPL</license>
+  <license>LGPL-2.1-only</license>
   <author>Steve Macenski</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -47,6 +47,7 @@
   <depend>rviz_ogre_vendor</depend>
   <depend>rviz_rendering</depend>
   <depend>geometry_msgs</depend>
+  <depend>nanoflann_vendor</depend>
   <exec_depend>eigen</exec_depend>
   <exec_depend>pluginlib</exec_depend>
   <exec_depend>message_filters</exec_depend>
